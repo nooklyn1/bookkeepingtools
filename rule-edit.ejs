@@ -1,0 +1,171 @@
+<div class="breadcrumb">
+  <a href="/settings">Settings</a><span class="sep"></span>
+  <a href="/settings/rules">Rules</a><span class="sep"></span>
+  <span><%= rule.id ? rule.name : 'New Rule' %></span>
+</div>
+
+<div class="page-header">
+  <h1><%= rule.id ? 'Edit' : 'New' %> Supplier Rule</h1>
+</div>
+
+<div class="rule-edit-layout">
+  <div>
+    <div class="settings-card">
+      <form method="POST" action="<%= rule.id ? '/settings/rules/' + rule.id : '/settings/rules' %>" id="rule-form">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <h3>Basic Info</h3>
+
+        <label>Name *
+          <input type="text" name="name" value="<%= rule.name %>" required placeholder="e.g. GKB Import">
+        </label>
+
+        <label>Email Pattern (regex) *
+          <input type="text" name="email_pattern" value="<%= rule.email_pattern %>" required placeholder="e.g. gkb-import\\.nl">
+          <small>Matched against the full email_from header (case insensitive)</small>
+        </label>
+
+        <label>Linked Supplier (Exact Online)
+          <select name="supplier_id">
+            <option value="">-- None --</option>
+            <% for (const s of suppliers) { %>
+              <option value="<%= s.id %>" <%= rule.supplier_id === s.id ? 'selected' : '' %>><%= s.code ? s.code + ' - ' : '' %><%= s.name %></option>
+            <% } %>
+          </select>
+        </label>
+
+        <label>Supplier Override (regex)
+          <input type="text" name="supplier_override_regex" value="<%= rule.supplier_override_regex || '' %>" placeholder="e.g. Adviseur\s+(.+?)(?:\s*\n)">
+          <small>If set, extracts supplier name from invoice text and looks up in Exact Online. Use for intermediaries that send invoices on behalf of other suppliers.</small>
+        </label>
+
+        <h3>Extraction Regexes</h3>
+        <small class="text-muted">Each regex should have one capture group <code>(...)</code> for the value to extract.</small>
+
+        <label>Invoice Number
+          <input type="text" name="invoice_number_regex" value="<%= rule.invoice_number_regex || '' %>" placeholder="e.g. Factuurnummer[:\\s]+(\\S+)">
+        </label>
+
+        <div class="grid">
+          <label>Date
+            <input type="text" name="date_regex" value="<%= rule.date_regex || '' %>" placeholder="e.g. Datum[:\\s]+(\\d{2}-\\d{2}-\\d{4})">
+          </label>
+          <label>Date Format
+            <select name="date_format">
+              <% const formats = ['DD-MM-YYYY','DD/MM/YYYY','DD.MM.YYYY','YYYY-MM-DD','MM/DD/YYYY','D-M-YYYY','DD-MM-YY','text-dutch','text-english']; %>
+              <% for (const f of formats) { %>
+                <option value="<%= f %>" <%= (rule.date_format || 'DD-MM-YYYY') === f ? 'selected' : '' %>><%= f %></option>
+              <% } %>
+            </select>
+          </label>
+        </div>
+
+        <label>Total Amount (incl. BTW)
+          <input type="text" name="total_regex" value="<%= rule.total_regex || '' %>" placeholder="e.g. Totaal incl\\.?\\s*BTW[:\\s]*[&euro;]?\\s*([\\d.,]+)">
+        </label>
+
+        <div class="grid">
+          <label>Subtotal (excl. BTW)
+            <input type="text" name="subtotal_regex" value="<%= rule.subtotal_regex || '' %>">
+          </label>
+          <label>VAT Amount
+            <input type="text" name="vat_regex" value="<%= rule.vat_regex || '' %>">
+          </label>
+        </div>
+
+        <div class="grid">
+          <label>Number Format
+            <select name="number_format">
+              <option value="dutch" <%= (rule.number_format || 'dutch') === 'dutch' ? 'selected' : '' %>>Dutch (1.234,56)</option>
+              <option value="english" <%= rule.number_format === 'english' ? 'selected' : '' %>>English (1,234.56)</option>
+            </select>
+          </label>
+          <label>Currency
+            <input type="text" name="currency" value="<%= rule.currency || 'EUR' %>">
+          </label>
+        </div>
+
+        <label>Notes
+          <textarea name="notes" rows="2"><%= rule.notes || '' %></textarea>
+        </label>
+
+        <div style="display:flex;gap:0.5rem">
+          <button type="submit" class="btn btn-primary">Save Rule</button>
+          <button type="button" class="btn btn-outline" id="test-btn">Test Regexes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="test-panel">
+    <div class="settings-card">
+      <h2>Test Area</h2>
+      <label>Paste raw invoice text here:
+        <textarea id="test-text" rows="15" placeholder="Paste extracted PDF/Excel text here to test your regexes..." style="font-family:'JetBrains Mono',monospace;font-size:0.8rem"><%= typeof sampleText !== 'undefined' ? sampleText : '' %></textarea>
+      </label>
+
+      <div id="test-results" style="display:none">
+        <h3>Extraction Results</h3>
+        <table class="test-results-table">
+          <tbody>
+            <tr><td>Invoice #</td><td class="result-value" id="res-invoice_number">-</td></tr>
+            <tr><td>Date</td><td class="result-value" id="res-invoice_date">-</td></tr>
+            <tr><td>Total</td><td class="result-value" id="res-total_amount">-</td></tr>
+            <tr><td>Subtotal</td><td class="result-value" id="res-subtotal">-</td></tr>
+            <tr><td>VAT</td><td class="result-value" id="res-vat_amount">-</td></tr>
+            <tr><td>Currency</td><td class="result-value" id="res-currency">-</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('test-btn').addEventListener('click', async function() {
+  const text = document.getElementById('test-text').value;
+  if (!text.trim()) { alert('Paste some invoice text first'); return; }
+
+  const form = document.getElementById('rule-form');
+  const rule = {
+    invoice_number_regex: form.invoice_number_regex.value,
+    date_regex: form.date_regex.value,
+    date_format: form.date_format.value,
+    total_regex: form.total_regex.value,
+    subtotal_regex: form.subtotal_regex.value,
+    vat_regex: form.vat_regex.value,
+    number_format: form.number_format.value,
+    currency: form.currency.value,
+  };
+
+  this.setAttribute('aria-busy', 'true');
+  try {
+    const resp = await fetch('/settings/rules/test', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-csrf-token': document.querySelector('meta[name="csrf-token"]').content,
+      },
+      body: JSON.stringify({ text, rule }),
+    });
+    const data = await resp.json();
+
+    document.getElementById('test-results').style.display = '';
+    for (const [key, el] of Object.entries({
+      invoice_number: 'res-invoice_number',
+      invoice_date: 'res-invoice_date',
+      total_amount: 'res-total_amount',
+      subtotal: 'res-subtotal',
+      vat_amount: 'res-vat_amount',
+      currency: 'res-currency',
+    })) {
+      const td = document.getElementById(el);
+      const val = data[key];
+      td.textContent = val != null ? String(val) : '-';
+      td.className = 'result-value' + (val != null ? ' found' : '');
+    }
+  } catch (e) {
+    alert('Test failed: ' + e.message);
+  }
+  this.removeAttribute('aria-busy');
+});
+</script>

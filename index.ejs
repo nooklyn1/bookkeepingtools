@@ -1,0 +1,152 @@
+<div class="page-header">
+  <h1>Dashboard</h1>
+  <div class="page-actions">
+    <% if (counts.pending > 0) { %>
+      <form method="POST" action="/invoices/workflow/start" style="margin:0">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit" class="btn btn-success">Start Booking (<%= counts.pending %>)</button>
+      </form>
+    <% } %>
+    <% if (gmailConnected) { %>
+      <form method="POST" action="/invoices/scan" style="margin:0;display:inline">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit" class="btn btn-outline">Scan Gmail</button>
+      </form>
+      <form method="POST" action="/invoices/fetch" style="margin:0;display:inline">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit" class="btn btn-primary">Fetch New Invoices</button>
+      </form>
+    <% } %>
+  </div>
+</div>
+
+<div class="connections-grid">
+  <div class="connection-card">
+    <div class="conn-info">
+      <div class="conn-icon gmail">GM</div>
+      <div>
+        <div class="conn-name">Gmail</div>
+        <div class="conn-status <%= gmailConnected ? '' : 'disconnected' %>"><%= gmailConnected ? 'Connected' : 'Not connected' %></div>
+      </div>
+    </div>
+    <a href="/auth/gmail" class="btn btn-sm btn-outline"><%= gmailConnected ? 'Reconnect' : 'Connect' %></a>
+  </div>
+
+  <div class="connection-card">
+    <div class="conn-info">
+      <div class="conn-icon exact">EO</div>
+      <div>
+        <div class="conn-name">Exact Online</div>
+        <div class="conn-status <%= exactConnected ? '' : 'disconnected' %>"><%= exactConnected ? 'Connected' + (exactDivision ? ' — Division ' + exactDivision : '') : 'Not connected' %></div>
+      </div>
+    </div>
+    <a href="/auth/exact" class="btn btn-sm btn-outline"><%= exactConnected ? 'Reconnect' : 'Connect' %></a>
+  </div>
+</div>
+
+<h2>Invoice Overview</h2>
+
+<div class="dashboard-grid">
+  <div class="stat-card">
+    <a href="/invoices">
+      <div class="stat-label">Total</div>
+      <div class="stat-value"><%= counts.total %></div>
+    </a>
+  </div>
+  <div class="stat-card stat-pending">
+    <a href="/invoices?status=pending">
+      <div class="stat-label">Pending</div>
+      <div class="stat-value"><%= counts.pending %></div>
+    </a>
+  </div>
+  <div class="stat-card stat-booked">
+    <a href="/invoices?status=booked">
+      <div class="stat-label">Booked</div>
+      <div class="stat-value"><%= counts.booked %></div>
+    </a>
+  </div>
+  <% if (counts.error > 0) { %>
+    <div class="stat-card stat-error">
+      <a href="/invoices?status=error">
+        <div class="stat-label">Error</div>
+        <div class="stat-value"><%= counts.error %></div>
+      </a>
+    </div>
+  <% } %>
+</div>
+
+<% if (duplicatePending && duplicatePending.length > 0) { %>
+  <div class="alert-banner alert-warning">
+    <strong>Possible duplicate invoices pending</strong>
+    <span class="text-muted">— same supplier + invoice number as an already-booked invoice:</span>
+    <ul style="margin:0.5rem 0 0 1rem;padding:0">
+      <% for (const d of duplicatePending) { %>
+        <li>
+          <a href="/invoices/<%= d.id %>"><strong><%= d.supplier_name || 'Unknown supplier' %></strong> — <%= d.invoice_number %></a>
+          already booked as <a href="/invoices/<%= d.existing_id %>">invoice #<%= d.existing_id %><% if (d.existing_entry) { %> (entry <%= d.existing_entry %>)<% } %></a>
+        </li>
+      <% } %>
+    </ul>
+  </div>
+<% } %>
+
+<% if (overdueRecurring && overdueRecurring.length > 0) { %>
+  <div class="alert-banner alert-warning">
+    <strong>Expected invoices overdue</strong>
+    <ul style="margin:0.5rem 0 0 1rem;padding:0">
+      <% for (const r of overdueRecurring) { %>
+        <li><strong><%= r.supplier_name %></strong> — last invoice <%= r.last_date %>, ~<%= Math.round(r.avg_interval_days) %>d cycle, <%= r.days_overdue %>d overdue (avg <%= r.currency === 'USD' ? '$' : r.currency === 'GBP' ? '£' : '€' %><%= r.avg_amount.toFixed(2) %>)</li>
+      <% } %>
+    </ul>
+  </div>
+<% } %>
+
+<% if (periodTotals && periodTotals.length > 0) { %>
+  <h2>Last 30 Days</h2>
+  <div class="dashboard-grid">
+    <% for (const pt of periodTotals) { %>
+      <div class="stat-card">
+        <div class="stat-label">Booked (<%= pt.currency || 'EUR' %>)</div>
+        <div class="stat-value"><%= pt.currency === 'USD' ? '$' : pt.currency === 'GBP' ? '£' : '€' %><%= pt.total.toFixed(0) %></div>
+        <div class="stat-sub"><%= pt.count %> invoice<%= pt.count !== 1 ? 's' : '' %></div>
+      </div>
+    <% } %>
+  </div>
+<% } %>
+
+<div class="dashboard-columns">
+  <% if (recentBookings && recentBookings.length > 0) { %>
+    <div>
+      <h2>Recent Bookings</h2>
+      <table class="data-table data-table-compact">
+        <tbody>
+          <% for (const b of recentBookings) { %>
+            <tr onclick="window.location='/invoices/<%= b.id %>'">
+              <td><%= b.supplier_name || '-' %></td>
+              <td><code><%= b.invoice_number || '-' %></code></td>
+              <td class="col-amount"><%= b.currency === 'USD' ? '$' : b.currency === 'GBP' ? '£' : '€' %><%= b.total_amount != null ? b.total_amount.toFixed(2) : '-' %></td>
+              <% if (b.booked_by) { %><td class="text-muted"><small><%= b.booked_by %></small></td><% } %>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+
+  <% if (topSuppliers && topSuppliers.length > 0) { %>
+    <div>
+      <h2>Top Suppliers (90d)</h2>
+      <table class="data-table data-table-compact">
+        <tbody>
+          <% for (const s of topSuppliers) { %>
+            <tr>
+              <td><%= s.supplier_name %></td>
+              <td><%= s.count %> inv.</td>
+              <td class="col-amount">&euro;<%= s.total ? s.total.toFixed(0) : '0' %></td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</div>

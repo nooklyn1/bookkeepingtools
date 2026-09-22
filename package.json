@@ -1,0 +1,29 @@
+{
+  "name": "bookkeepingtools",
+  "version": "1.0.0",
+  "description": "Automate purchase invoice bookkeeping: Gmail -> PDF extraction -> Exact Online",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "better-sqlite3-session-store": "^0.1.0",
+    "csrf-sync": "^4.2.1",
+    "dotenv": "^16.4.0",
+    "ejs": "^3.1.10",
+    "express": "^4.21.0",
+    "express-session": "^1.19.0",
+    "googleapis": "^144.0.0",
+    "pdf-parse": "^1.1.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}

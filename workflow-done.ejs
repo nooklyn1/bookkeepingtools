@@ -1,0 +1,66 @@
+<div class="page-header">
+  <h1>Booking Complete</h1>
+</div>
+
+<div class="dashboard-grid" style="margin-bottom: 1.5rem;">
+  <div class="stat-card stat-booked">
+    <div class="stat-label">Booked</div>
+    <div class="stat-value"><%= summary.booked %></div>
+  </div>
+  <div class="stat-card stat-reviewed">
+    <div class="stat-label">Skipped</div>
+    <div class="stat-value"><%= summary.skipped %></div>
+  </div>
+  <% if (summary.errors > 0) { %>
+    <div class="stat-card stat-error">
+      <div class="stat-label">Errors</div>
+      <div class="stat-value"><%= summary.errors %></div>
+    </div>
+  <% } %>
+  <div class="stat-card">
+    <div class="stat-label">Total</div>
+    <div class="stat-value"><%= summary.total %></div>
+  </div>
+</div>
+
+<% if (results.length > 0) { %>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Invoice</th>
+        <th>Result</th>
+        <th>Details</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% for (const r of results) { %>
+        <tr onclick="window.location='/invoices/<%= r.id %>'" style="cursor:pointer">
+          <td class="col-id">#<%= r.id %></td>
+          <td>
+            <% if (r.action === 'booked') { %>
+              <span class="badge badge-booked">Booked</span>
+            <% } else if (r.action === 'skipped') { %>
+              <span class="badge badge-reviewed">Skipped</span>
+            <% } else if (r.action === 'error') { %>
+              <span class="badge badge-error">Error</span>
+            <% } %>
+          </td>
+          <td>
+            <% if (r.entryId) { %>
+              <code><%= r.entryId %></code>
+            <% } else if (r.error) { %>
+              <span class="text-muted"><%= r.error %></span>
+            <% } else { %>
+              —
+            <% } %>
+          </td>
+        </tr>
+      <% } %>
+    </tbody>
+  </table>
+<% } %>
+
+<div style="margin-top: 1.5rem;">
+  <a href="/" class="btn btn-primary">Back to Dashboard</a>
+  <a href="/invoices" class="btn btn-outline">View All Invoices</a>
+</div>

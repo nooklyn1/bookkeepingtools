@@ -1,0 +1,106 @@
+<div class="page-header">
+  <h1>Settings</h1>
+</div>
+
+<div class="settings-card">
+  <h2>General</h2>
+  <form method="POST" action="/settings">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>Gmail Search Query
+      <input type="text" name="gmail_search_query" value="<%= settings.gmail_search_query || '' %>">
+      <small>Gmail search query for fetching invoices</small>
+    </label>
+
+    <label>Default Journal
+      <% if (journals && journals.length > 0) { %>
+        <select name="default_journal">
+          <option value="">-- Default (60) --</option>
+          <% for (const j of journals) { %>
+            <option value="<%= j.code %>" <%= settings.default_journal === j.code ? 'selected' : '' %>><%= j.code %> - <%= j.description %></option>
+          <% } %>
+        </select>
+      <% } else { %>
+        <input type="text" name="default_journal" value="<%= settings.default_journal || '' %>" placeholder="60">
+      <% } %>
+      <small>Journal code for purchase entries (default: 60 Inkoopboek)</small>
+    </label>
+
+    <h3>Gmail Labels</h3>
+    <p class="text-muted" style="margin:0 0 0.5rem">
+      Full Gmail label names (case-sensitive, use <code>/</code> for sublabels). Edit these here when
+      renaming labels in Gmail — no deploy needed. See the rename steps below before changing them.
+    </p>
+
+    <div class="grid">
+      <label>Gmail queue label
+        <input type="text" name="gmail_label_queue" value="<%= settings.gmail_label_queue || '' %>" placeholder="e.g. 4.Inkopen/4.1 Inkoopfacturen">
+        <small>Label group holding invoices waiting to be booked. Scan targets this label and all its sublabels; removed from the email after booking.</small>
+      </label>
+      <label>Gmail processed label
+        <input type="text" name="gmail_label_processed" value="<%= settings.gmail_label_processed || '' %>" placeholder="e.g. 4.Inkopen/4.1 Inkoopfacturen/4.1 Gedownload naar Exact">
+        <small>Added to the email after a successful booking ("Gedownload naar Exact"). Leave empty to skip relabeling.</small>
+      </label>
+    </div>
+
+    <details style="margin:0.5rem 0 0.75rem">
+      <summary class="text-muted">How to rename a Gmail label safely</summary>
+      <ol class="text-muted" style="margin:0.5rem 0 0 1rem">
+        <li>First confirm the values above still match the current Gmail label names.</li>
+        <li>In one sitting: rename the label(s) in Gmail (Gmail keeps sublabels attached under the new parent), then <em>immediately</em> update the fields above to the new full names and Save.</li>
+        <li>In the brief gap between the two, a Scan may fail with a harmless "label not found" error — the next Scan succeeds once both sides agree. Bookings are unaffected (they only relabel, and relabel failures are logged, never blocking).</li>
+      </ol>
+    </details>
+
+    <h3>Notifications</h3>
+    <label>Webhook URL (Slack/Discord/etc.)
+      <input type="url" name="webhook_url" value="<%= settings.webhook_url || '' %>" placeholder="https://hooks.slack.com/services/...">
+      <small>POST JSON on booking errors. Leave empty to disable.</small>
+    </label>
+
+    <button type="submit" class="btn btn-primary">Save Settings</button>
+  </form>
+</div>
+
+<div class="settings-card">
+  <h2>Supplier Extraction Rules</h2>
+  <p><%= ruleCount %> rule<%= ruleCount !== 1 ? 's' : '' %> configured.</p>
+  <a href="/settings/rules" class="btn btn-outline">Manage Rules</a>
+</div>
+
+<div class="settings-card">
+  <h2>Exact Online Lookup Data</h2>
+
+  <% if (exactConnected) { %>
+    <div class="sync-stats">
+      <div class="sync-stat">
+        <div class="sync-count"><%= lookupCounts.suppliers %></div>
+        <div class="sync-label">Suppliers</div>
+      </div>
+      <div class="sync-stat">
+        <div class="sync-count"><%= lookupCounts.glAccounts %></div>
+        <div class="sync-label">GL Accounts</div>
+      </div>
+      <div class="sync-stat">
+        <div class="sync-count"><%= lookupCounts.vatCodes %></div>
+        <div class="sync-label">VAT Codes</div>
+      </div>
+      <div class="sync-stat">
+        <div class="sync-count"><%= lookupCounts.journals %></div>
+        <div class="sync-label">Journals</div>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+      <form method="POST" action="/settings/sync">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit" class="btn btn-outline">Sync from Exact Online</button>
+      </form>
+      <form method="POST" action="/settings/sync?force=1">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit" class="btn btn-sm btn-ghost">Force refresh</button>
+      </form>
+    </div>
+  <% } else { %>
+    <p class="text-muted">Connect to Exact Online first to sync lookup data.</p>
+  <% } %>
+</div>

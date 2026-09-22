@@ -1,0 +1,57 @@
+<div class="breadcrumb">
+  <a href="/settings">Settings</a><span class="sep"></span>
+  <span>Supplier Rules</span>
+</div>
+
+<div class="page-header">
+  <h1>Supplier Extraction Rules</h1>
+  <div class="page-actions">
+    <a href="/settings/rules/new" class="btn btn-primary">Add Rule</a>
+  </div>
+</div>
+
+<% if (rules.length === 0) { %>
+  <div class="empty-state">
+    <p>No rules yet. Add a rule to extract invoice data per supplier.</p>
+    <a href="/settings/rules/new" class="btn btn-primary">Add Rule</a>
+  </div>
+<% } else { %>
+  <div class="card">
+    <table class="rules-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email Pattern</th>
+          <th>Linked Supplier</th>
+          <th>Extractions</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (const r of rules) { %>
+          <tr>
+            <td><strong><%= r.name %></strong></td>
+            <td><code><%= r.email_pattern %></code></td>
+            <td><%= r.supplier_name_exact || '<span class="text-muted">-</span>' %></td>
+            <td>
+              <div class="regex-tags">
+                <span class="regex-tag <%= r.invoice_number_regex ? 'active' : '' %>">inv#</span>
+                <span class="regex-tag <%= r.date_regex ? 'active' : '' %>">date</span>
+                <span class="regex-tag <%= r.total_regex ? 'active' : '' %>">total</span>
+                <span class="regex-tag <%= r.subtotal_regex ? 'active' : '' %>">sub</span>
+                <span class="regex-tag <%= r.vat_regex ? 'active' : '' %>">vat</span>
+              </div>
+            </td>
+            <td>
+              <a href="/settings/rules/<%= r.id %>/edit" class="btn btn-sm btn-ghost">Edit</a>
+              <form method="POST" action="/settings/rules/<%= r.id %>/delete" style="display:inline;margin:0" onsubmit="return confirm('Delete this rule?')">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button type="submit" class="btn btn-sm btn-ghost" style="color:var(--bk-error)">Delete</button>
+              </form>
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+<% } %>

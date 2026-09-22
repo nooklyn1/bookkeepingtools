@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %> - Bookkeeping Tools</title>
+  <meta name="csrf-token" content="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav class="app-nav">
+    <a href="/" class="nav-brand">
+      <span class="brand-icon">BK</span>
+      <span>Bookkeeping</span>
+    </a>
+    <button class="nav-toggle" onclick="this.closest('.app-nav').classList.toggle('nav-open')" aria-label="Toggle navigation">
+      <span></span><span></span><span></span>
+    </button>
+    <div class="nav-links">
+      <a href="/" class="<%= typeof activePage !== 'undefined' && activePage === 'dashboard' ? 'active' : '' %>">Dashboard</a>
+      <a href="/invoices" class="<%= typeof activePage !== 'undefined' && activePage === 'invoices' ? 'active' : '' %>">Invoices</a>
+      <a href="/settings" class="<%= typeof activePage !== 'undefined' && activePage === 'settings' ? 'active' : '' %>">Settings</a>
+    </div>
+    <div class="nav-right">
+      <% if (typeof user !== 'undefined' && user) { %>
+        <small><%= user.email %></small>
+        <a href="/login/logout">Logout</a>
+      <% } %>
+    </div>
+  </nav>
+
+  <main>
+    <div class="app-main">
+      <% if (typeof flash !== 'undefined' && flash) { %>
+        <div class="flash-toast <%= typeof flashType !== 'undefined' && flashType === 'error' ? 'flash-error' : typeof flashType !== 'undefined' && flashType === 'success' ? 'flash-success' : '' %>" id="flash-msg">
+          <span><%= flash %></span>
+          <button class="flash-dismiss" onclick="this.parentElement.remove()">&times;</button>
+        </div>
+      <% } %>
+      <%- body %>
+    </div>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

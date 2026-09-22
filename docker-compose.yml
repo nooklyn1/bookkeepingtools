@@ -1,0 +1,11 @@
+services:
+  bookkeeping:
+    build: .
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./data:/app/data
+      - ./certs:/app/certs:ro
+    env_file:
+      - .env
+    restart: unless-stopped

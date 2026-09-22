@@ -1,0 +1,107 @@
+<div class="page-header">
+  <h1>Invoices</h1>
+  <div class="page-actions">
+    <form method="POST" action="/invoices/scan" style="margin:0;display:inline">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button type="submit" class="btn btn-outline">Scan Gmail</button>
+    </form>
+    <form method="POST" action="/invoices/fetch" style="margin:0;display:inline">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button type="submit" class="btn btn-outline">Fetch from Gmail</button>
+    </form>
+  </div>
+</div>
+
+<div class="filter-tabs">
+  <a href="/invoices<%= search ? '?q=' + encodeURIComponent(search) : '' %>" class="<%= !currentStatus ? 'active' : '' %>">All<span class="tab-count"><%= statusCounts.total %></span></a>
+  <a href="/invoices?status=pending<%= search ? '&q=' + encodeURIComponent(search) : '' %>" class="<%= currentStatus === 'pending' ? 'active' : '' %>">Pending<span class="tab-count"><%= statusCounts.pending %></span></a>
+  <a href="/invoices?status=booked<%= search ? '&q=' + encodeURIComponent(search) : '' %>" class="<%= currentStatus === 'booked' ? 'active' : '' %>">Booked<span class="tab-count"><%= statusCounts.booked %></span></a>
+  <% if (statusCounts.error > 0) { %>
+    <a href="/invoices?status=error<%= search ? '&q=' + encodeURIComponent(search) : '' %>" class="<%= currentStatus === 'error' ? 'active' : '' %>">Error<span class="tab-count"><%= statusCounts.error %></span></a>
+  <% } %>
+</div>
+
+<div class="search-bar">
+  <form method="GET" action="/invoices">
+    <% if (currentStatus) { %><input type="hidden" name="status" value="<%= currentStatus %>"><% } %>
+    <input type="search" name="q" value="<%= search %>" placeholder="Search supplier, invoice #, subject...">
+    <button type="submit" class="btn btn-sm btn-outline">Search</button>
+    <% if (search) { %><a href="/invoices<%= currentStatus ? '?status=' + currentStatus : '' %>" class="btn btn-sm btn-ghost">Clear</a><% } %>
+  </form>
+</div>
+
+<% if (invoices.length === 0) { %>
+  <div class="empty-state">
+    <% if (search) { %>
+      <p>No invoices matching "<%= search %>".</p>
+      <a href="/invoices<%= currentStatus ? '?status=' + currentStatus : '' %>" class="btn btn-outline">Clear search</a>
+    <% } else if (currentStatus) { %>
+      <p>No invoices found.</p>
+      <a href="/invoices" class="btn btn-outline">Show all invoices</a>
+    <% } else { %>
+      <p>No invoices found.</p>
+      <form method="POST" action="/invoices/fetch" style="display:inline">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit" class="btn btn-primary">Fetch from Gmail</button>
+      </form>
+    <% } %>
+  </div>
+<% } else { %>
+  <form id="bulk-form" method="POST">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="bulk-bar" id="bulk-bar" style="display:none">
+      <span id="bulk-count">0</span> selected
+      <button type="submit" formaction="/invoices/bulk/reset" class="btn btn-sm btn-outline">Reset to Pending</button>
+      <button type="submit" formaction="/invoices/bulk/delete" class="btn btn-sm btn-danger" onclick="return confirm('Delete selected invoices?')">Delete</button>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width:2rem"><input type="checkbox" id="select-all" class="bulk-check"></th>
+          <th>Date</th>
+          <th>Supplier</th>
+          <th>Invoice #</th>
+          <th class="col-subject">Email Subject</th>
+          <th style="text-align:right">Total</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% for (const inv of invoices) { %>
+          <tr onclick="window.location='/invoices/<%= inv.id %>'">
+            <td onclick="event.stopPropagation()"><input type="checkbox" name="ids" value="<%= inv.id %>" class="bulk-check row-check"></td>
+            <td class="col-date"><%= inv.invoice_date || '-' %></td>
+            <td class="col-supplier"><%= inv.supplier_name || '-' %></td>
+            <td>
+              <code><%= inv.invoice_number || '-' %></code>
+              <% if (typeof duplicateIds !== 'undefined' && duplicateIds.has(inv.id)) { %>
+                <span class="badge badge-error" title="Same supplier + invoice number as another invoice">dup?</span>
+              <% } %>
+            </td>
+            <td class="col-subject" title="<%= inv.email_subject || '' %>"><%= inv.email_subject || '-' %></td>
+            <td class="col-amount">
+              <% if (inv.total_amount != null && inv.total_amount < 0) { %><span class="badge badge-credit">Credit</span> <% } %>
+              <%= inv.total_amount != null ? (inv.currency === 'USD' ? '$ ' : inv.currency === 'GBP' ? '£ ' : '€ ') + inv.total_amount.toFixed(2) : '-' %>
+            </td>
+            <td>
+              <span class="badge badge-<%= inv.status %>"><%= inv.status %></span>
+              <% if (inv.status === 'booked' && inv.exactonline_entry_id) { %>
+                <code class="text-muted" style="font-size:0.75rem"><%= inv.exactonline_entry_id %></code>
+              <% } %>
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </form>
+
+  <div class="pagination">
+    <% if (page > 1) { %>
+      <a href="/invoices?<%= currentStatus ? 'status=' + currentStatus + '&' : '' %><%= search ? 'q=' + encodeURIComponent(search) + '&' : '' %>page=<%= page - 1 %>" class="btn btn-sm btn-outline">Previous</a>
+    <% } %>
+    <span class="pagination-info">Page <%= page %></span>
+    <% if (hasNext) { %>
+      <a href="/invoices?<%= currentStatus ? 'status=' + currentStatus + '&' : '' %><%= search ? 'q=' + encodeURIComponent(search) + '&' : '' %>page=<%= page + 1 %>" class="btn btn-sm btn-outline">Next</a>
+    <% } %>
+  </div>
+<% } %>

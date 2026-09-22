@@ -1,0 +1,403 @@
+<% if (workflowInfo) { %>
+  <div class="workflow-bar">
+    <div class="workflow-progress">
+      <div class="workflow-track">
+        <div class="workflow-fill" style="width: <%= (workflowInfo.current / workflowInfo.total) * 100 %>%"></div>
+      </div>
+      <span class="workflow-counter">Invoice <%= workflowInfo.current %> of <%= workflowInfo.total %></span>
+    </div>
+    <a href="/invoices/workflow/exit" class="btn btn-sm btn-ghost">Exit Workflow</a>
+  </div>
+<% } %>
+
+<div class="breadcrumb">
+  <a href="/invoices">Invoices</a><span class="sep"></span>
+  <span>#<%= invoice.id %> — <%= invoice.supplier_name || invoice.pdf_filename || 'Review' %></span>
+</div>
+
+<% if (typeof duplicateWarning !== 'undefined' && duplicateWarning) { %>
+  <%
+    const curSym = (c) => c === 'USD' ? '$' : c === 'GBP' ? '£' : '€';
+    const fmtAmt = (a, c) => a != null ? curSym(c) + Number(a).toFixed(2) : '—';
+  %>
+  <div class="alert-banner alert-warning" id="duplicate-warning">
+    <strong>Possible duplicate — booking blocked.</strong>
+    Invoice number <code><%= duplicateWarning.invoiceNumber %></code>
+    <% if (duplicateWarning.supplierName) { %>for <strong><%= duplicateWarning.supplierName %></strong><% } %>
+    is already
+    <% if (duplicateWarning.existingStatus === 'booked') { %>
+      <strong>booked</strong><% if (duplicateWarning.existingEntry) { %> (entry <code><%= duplicateWarning.existingEntry %></code>)<% } %>
+    <% } else { %>
+      present as a <strong><%= duplicateWarning.existingStatus %></strong> invoice
+    <% } %>
+    in this tool.
+    <table class="data-table data-table-compact" style="margin:0.5rem 0; background:transparent">
+      <thead>
+        <tr><th></th><th>Invoice #</th><th>Date</th><th style="text-align:right">Total</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>This one (#<%= invoice.id %>)</td>
+          <td><code><%= invoice.invoice_number || '—' %></code></td>
+          <td><%= invoice.invoice_date || '—' %></td>
+          <td class="col-amount"><%= fmtAmt(invoice.total_amount, invoice.currency) %></td>
+        </tr>
+        <tr>
+          <td>Existing (<a href="/invoices/<%= duplicateWarning.existingId %>">#<%= duplicateWarning.existingId %></a>)</td>
+          <td><code><%= duplicateWarning.invoiceNumber %></code></td>
+          <td><%= duplicateWarning.existingDate || '—' %></td>
+          <td class="col-amount"><%= fmtAmt(duplicateWarning.existingAmount, duplicateWarning.existingCurrency) %></td>
+        </tr>
+      </tbody>
+    </table>
+    <small class="text-muted">Same amount &amp; date usually means the invoice was re-sent (e.g. on a reminder). Different amount may be a credit note or a related document — check before booking.</small>
+    <div style="margin-top:0.5rem">
+      <a href="/invoices/<%= duplicateWarning.existingId %>" class="btn btn-sm btn-outline">Open existing #<%= duplicateWarning.existingId %></a>
+      <button type="submit" form="review-form-main" formaction="/invoices/<%= invoice.id %>/book"
+        class="btn btn-sm btn-danger"
+        onclick="document.getElementById('force-flag').value='1'; return confirm('Book this invoice anyway? A duplicate already exists.');">
+        Book anyway
+      </button>
+    </div>
+  </div>
+<% } %>
+
+<div class="review-layout">
+  <div class="pdf-panel">
+      <iframe src="/invoices/<%= invoice.id %>/pdf" width="100%" style="height: calc(100vh - 120px); min-height: 500px;"></iframe>
+
+    <%/* Info panels below PDF */-%>
+    <details class="info-panel">
+      <summary>Email Info</summary>
+      <div class="panel-content">
+        <dl>
+          <dt>From</dt><dd><%= invoice.email_from %></dd>
+          <dt>Subject</dt><dd><%= invoice.email_subject %></dd>
+          <dt>Date</dt><dd><%= invoice.email_date %></dd>
+        </dl>
+      </div>
+    </details>
+
+    <% if (invoice.raw_text) { %>
+      <details class="info-panel">
+        <summary>Raw PDF Text</summary>
+        <div class="panel-content">
+          <pre><%= invoice.raw_text %></pre>
+        </div>
+      </details>
+    <% } %>
+
+    <% if (matchedRule) { %>
+      <div class="rule-link">
+        Matched rule: <strong><%= matchedRule.name %></strong>
+        <a href="/settings/rules/<%= matchedRule.id %>/edit" class="btn btn-sm btn-ghost">Edit rule</a>
+      </div>
+    <% } else if (invoice.email_from) { %>
+      <%
+        const emailAddr = (invoice.email_from.match(/<([^>]+)>/) || [])[1] || invoice.email_from;
+        const domain = (emailAddr.split('@')[1] || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const supplierName = invoice.supplier_name || '';
+      %>
+      <div class="rule-link">
+        No extraction rule matched.
+        <a href="/settings/rules/new?name=<%= encodeURIComponent(supplierName) %>&email_pattern=<%= encodeURIComponent(domain) %>&supplier_id=<%= encodeURIComponent(invoice.supplier_id || '') %>" class="btn btn-sm btn-ghost">Create rule</a>
+      </div>
+    <% } %>
+
+    <% if (learnSuggestions && learnSuggestions.suggestions) { %>
+      <div class="learn-banner" id="learn-banner">
+        <div class="learn-banner-header">
+          <strong>Learned patterns</strong>
+          <button type="button" class="btn btn-sm btn-ghost" onclick="document.getElementById('learn-banner').remove()">Dismiss</button>
+        </div>
+        <div class="learn-banner-items">
+          <% for (const [field, s] of Object.entries(learnSuggestions.suggestions)) { %>
+            <div class="learn-item">
+              <span class="learn-label"><%= s.label %></span>
+              <code class="learn-regex"><%= s.regex %></code>
+              <% if (s.date_format) { %>
+                <span class="learn-format">(<%= s.date_format %>)</span>
+              <% } %>
+              <% if (s.old_regex) { %>
+                <span class="learn-replaces">replaces: <code><%= s.old_regex %></code></span>
+              <% } else { %>
+                <span class="learn-new">new</span>
+              <% } %>
+            </div>
+          <% } %>
+        </div>
+        <div class="learn-banner-actions">
+          <% if (learnSuggestions.ruleId) { %>
+            <form method="POST" action="/invoices/<%= invoice.id %>/apply-suggestions" style="display:inline">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="rule_id" value="<%= learnSuggestions.ruleId %>">
+              <input type="hidden" name="suggestions" value="<%= JSON.stringify(learnSuggestions.suggestions) %>">
+              <button type="submit" class="btn btn-sm btn-primary">Apply to Rule</button>
+            </form>
+          <% } else { %>
+            <%
+              const learnEmail = (invoice.email_from.match(/<([^>]+)>/) || [])[1] || invoice.email_from;
+              const learnDomain = (learnEmail.split('@')[1] || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const ruleParams = new URLSearchParams({
+                name: learnSuggestions.supplierName || '',
+                email_pattern: learnDomain,
+                supplier_id: learnSuggestions.supplierId || '',
+              });
+              for (const [field, s] of Object.entries(learnSuggestions.suggestions)) {
+                ruleParams.set(field, s.regex);
+                if (s.date_format && s.format_field) {
+                  ruleParams.set(s.format_field, s.date_format);
+                }
+              }
+            %>
+            <a href="/settings/rules/new?<%= ruleParams.toString() %>" class="btn btn-sm btn-primary">Create Rule with Suggestions</a>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
+  </div>
+
+  <div>
+    <form method="POST" action="/invoices/<%= invoice.id %>" id="review-form-main">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div class="review-form">
+        <%/* Status banner */-%>
+        <div class="review-status status-<%= invoice.status %>">
+          <span class="status-text">
+            <span class="badge badge-<%= invoice.status %>"><%= invoice.status %></span>
+            <% if (invoice.status === 'booked' && invoice.exactonline_entry_id) { %>
+              Booking: <code><%= invoice.exactonline_entry_id %></code>
+              <% if (invoice.booked_at) { %>
+                <small class="text-muted" style="margin-left:0.5rem">by <%= invoice.booked_by %> on <%= new Date(invoice.booked_at + 'Z').toLocaleDateString('nl-NL') %></small>
+              <% } %>
+            <% } %>
+            <% if (invoice.status === 'error' && invoice.error_message) { %>
+              <%= invoice.error_message %>
+            <% } %>
+          </span>
+        </div>
+
+        <% if (invoice.total_amount != null && invoice.total_amount < 0) { %>
+          <div class="credit-note-banner">This is a credit note (negative total).</div>
+        <% } %>
+
+        <%/* Supplier section */-%>
+        <div class="form-section">
+          <div class="form-section-title">Supplier</div>
+
+          <label>Supplier Name
+            <input type="text" name="supplier_name" value="<%= invoice.supplier_name || '' %>" readonly tabindex="-1" style="background: var(--bk-gray-100); cursor: default;">
+          </label>
+
+          <label>Supplier (Exact Online)
+            <select name="supplier_id" data-searchable>
+              <option value="">-- Select --</option>
+              <% for (const s of suppliers) { %>
+                <option value="<%= s.id %>" <%= invoice.supplier_id === s.id ? 'selected' : '' %>><%= s.code ? s.code + ' - ' : '' %><%= s.name %></option>
+              <% } %>
+            </select>
+          </label>
+
+          <% if (!invoice.supplier_id) { %>
+            <details class="create-supplier-panel">
+              <summary class="btn btn-sm btn-outline">+ Create New Supplier in Exact</summary>
+              <div class="panel-content" style="margin-top:0.5rem">
+                <div class="grid">
+                  <label>Supplier Name *
+                    <input type="text" id="new-supplier-name" value="<%= invoice.supplier_name || '' %>">
+                  </label>
+                  <label>VAT Number
+                    <input type="text" id="new-supplier-vat-number" placeholder="e.g. NL123456789B01">
+                  </label>
+                </div>
+                <div class="grid">
+                  <label>KVK Number
+                    <input type="text" id="new-supplier-kvk" placeholder="e.g. 12345678">
+                  </label>
+                  <label>Payment Condition
+                    <input type="text" id="new-supplier-payment-condition" placeholder="e.g. 30">
+                  </label>
+                </div>
+                <div class="grid">
+                  <label>Address
+                    <input type="text" id="new-supplier-address" placeholder="Street and number">
+                  </label>
+                  <label>Postcode
+                    <input type="text" id="new-supplier-postcode" placeholder="e.g. 1234 AB">
+                  </label>
+                </div>
+                <div class="grid">
+                  <label>City
+                    <input type="text" id="new-supplier-city">
+                  </label>
+                  <label>Country
+                    <select id="new-supplier-country">
+                      <option value="">-- Optional --</option>
+                      <option value="NL" selected>Netherlands</option>
+                      <option value="DE">Germany</option>
+                      <option value="BE">Belgium</option>
+                      <option value="GB">United Kingdom</option>
+                      <option value="FR">France</option>
+                      <option value="US">United States</option>
+                      <option value="TW">Taiwan</option>
+                      <option value="CN">China</option>
+                      <option value="AU">Australia</option>
+                      <option value="PL">Poland</option>
+                      <option value="AT">Austria</option>
+                      <option value="IT">Italy</option>
+                      <option value="ES">Spain</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="grid">
+                  <label>Default GL Account
+                    <select id="new-supplier-gl">
+                      <option value="">-- Optional --</option>
+                      <% for (const gl of glAccounts) { %>
+                        <option value="<%= gl.id %>"><%= gl.code %> - <%= gl.description %></option>
+                      <% } %>
+                    </select>
+                  </label>
+                  <label>Default VAT Code
+                    <select id="new-supplier-vat">
+                      <option value="">-- Optional --</option>
+                      <% for (const v of vatCodes) { %>
+                        <option value="<%= v.code %>"><%= v.code %> - <%= v.description %></option>
+                      <% } %>
+                    </select>
+                  </label>
+                </div>
+                <button type="button" class="btn btn-sm btn-primary" onclick="createSupplier()">Create Supplier</button>
+              </div>
+            </details>
+          <% } %>
+        </div>
+
+        <%/* Invoice details section */-%>
+        <div class="form-section">
+          <div class="form-section-title">Invoice Details</div>
+
+          <div class="grid">
+            <label>Invoice Number
+              <input type="text" name="invoice_number" value="<%= invoice.invoice_number || '' %>">
+            </label>
+            <label>Uw ref.
+              <input type="text" name="your_ref" value="<%= invoice.your_ref || invoice.invoice_number || '' %>">
+            </label>
+          </div>
+
+          <div class="grid">
+            <label>Factuurdatum
+              <input type="date" name="invoice_date" value="<%= invoice.invoice_date || '' %>">
+            </label>
+            <label>Vervaldatum
+              <input type="date" name="due_date" value="<%= invoice.due_date || '' %>">
+            </label>
+          </div>
+
+          <div class="grid">
+            <label>Currency
+              <input type="text" name="currency" value="<%= invoice.currency || 'EUR' %>">
+            </label>
+            <label>Journal
+              <% if (journals && journals.length > 0) { %>
+                <select name="journal">
+                  <option value="">-- Default --</option>
+                  <% for (const j of journals) { %>
+                    <option value="<%= j.code %>" <%= invoice.journal === j.code ? 'selected' : '' %>><%= j.code %> - <%= j.description %></option>
+                  <% } %>
+                </select>
+              <% } else { %>
+                <input type="text" name="journal" value="<%= invoice.journal || '' %>" placeholder="Default">
+              <% } %>
+            </label>
+          </div>
+          <% if (invoice.currency && invoice.currency !== 'EUR') { %>
+            <small class="text-muted">Non-EUR invoice — exchange rate will be applied by Exact Online.</small>
+          <% } %>
+        </div>
+
+        <%/* Line items section */-%>
+        <div class="form-section">
+          <div class="form-section-title">Line Items</div>
+
+          <div id="line-items">
+            <% const items = invoice.line_items && invoice.line_items.length ? invoice.line_items : [{ description: '', amount: '', gl_account: '', vat_code: '' }]; %>
+            <% for (let i = 0; i < items.length; i++) { %>
+              <fieldset class="line-item">
+                <div class="grid">
+                  <label>Description
+                    <input type="text" name="line_description" value="<%= items[i].description || '' %>">
+                  </label>
+                  <label>Amount
+                    <input type="number" step="0.01" name="line_amount" value="<%= items[i].amount || '' %>" class="line-amount">
+                  </label>
+                </div>
+                <div class="grid">
+                  <label>GL Account
+                    <select name="line_gl_account">
+                      <option value="">-- Select --</option>
+                      <% for (const gl of glAccounts) { %>
+                        <option value="<%= gl.id %>" <%= items[i].gl_account === gl.id ? 'selected' : '' %>><%= gl.code %> - <%= gl.description %></option>
+                      <% } %>
+                    </select>
+                  </label>
+                  <label>VAT Code
+                    <select name="line_vat_code">
+                      <option value="">-- Select --</option>
+                      <% for (const v of vatCodes) { %>
+                        <option value="<%= v.id %>" <%= items[i].vat_code === v.id ? 'selected' : '' %>><%= v.code %> - <%= v.description %></option>
+                      <% } %>
+                    </select>
+                  </label>
+                  <label>&nbsp;
+                    <button type="button" class="btn btn-sm btn-ghost remove-line" onclick="removeLine(this)">Remove</button>
+                  </label>
+                </div>
+              </fieldset>
+            <% } %>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline" onclick="addLine()">+ Add Line</button>
+        </div>
+
+        <%/* Totals section */-%>
+        <div class="form-section">
+          <div class="form-section-title">Totals (<%= invoice.currency || 'EUR' %>)</div>
+          <div class="grid">
+            <label>Subtotal
+              <input type="number" step="0.01" name="subtotal" id="subtotal" value="<%= invoice.subtotal || '' %>">
+            </label>
+            <label>VAT Amount
+              <input type="number" step="0.01" name="vat_amount" id="vat_amount" value="<%= invoice.vat_amount || '' %>">
+            </label>
+            <label>Total
+              <input type="number" step="0.01" name="total_amount" id="total_amount" value="<%= invoice.total_amount || '' %>">
+            </label>
+          </div>
+        </div>
+
+        <%/* Action bar */-%>
+        <div class="form-actions">
+          <input type="hidden" name="force" id="force-flag" value="">
+          <% if (workflowInfo) { %>
+            <button type="submit" class="btn btn-primary">Save</button>
+            <button type="submit" formaction="/invoices/<%= invoice.id %>/book" class="btn btn-success">Book & Next</button>
+            <button type="submit" formaction="/invoices/<%= invoice.id %>/book" class="btn btn-sm btn-outline" onclick="document.getElementById('force-flag').value='1'">Book (Force)</button>
+            <button type="submit" formaction="/invoices/workflow/skip" class="btn btn-outline">Skip</button>
+            <span class="spacer"></span>
+            <a href="/invoices/workflow/exit" class="btn btn-sm btn-ghost">Exit Workflow</a>
+          <% } else { %>
+            <button type="submit" class="btn btn-primary">Save</button>
+            <% if (invoice.status === 'pending' || invoice.status === 'error') { %>
+              <button type="submit" formaction="/invoices/<%= invoice.id %>/book" class="btn btn-success">Approve & Book</button>
+              <button type="submit" formaction="/invoices/<%= invoice.id %>/book" class="btn btn-sm btn-outline" onclick="document.getElementById('force-flag').value='1'">Book (Force)</button>
+            <% } %>
+            <span class="spacer"></span>
+            <button type="submit" formaction="/invoices/<%= invoice.id %>/reparse" class="btn btn-sm btn-ghost">Re-parse</button>
+            <button type="submit" formaction="/invoices/<%= invoice.id %>/delete" class="btn btn-sm btn-danger" onclick="return confirm('Delete this invoice?')">Delete</button>
+          <% } %>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>

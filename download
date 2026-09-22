@@ -1,0 +1,11 @@
+node_modules
+data
+certs
+.env
+.git
+.gitignore
+.playwright-mcp
+*.PNG
+CLAUDE.md
+Untitled
+Capture.PNG
